@@ -21,7 +21,11 @@ export const signup = async (req, res) => {
 
     } catch (error) {
         // console.log(error);
-        res.status(404).json({message: error.message});
+        if(error.code && error.code === 11000) {
+            return res.status(409).json({message: "Email Already Exist!"});
+        } else {
+            return res.status(404).json({message: error.message});
+        }
     }
 };
 
@@ -33,13 +37,13 @@ export const signin = async (req, res) => {
         const user = await User.findOne({ email: email });
     
         if (!user) {
-            return res.status(403).json(`No User Found with email: ${email}`);
+            return res.status(403).json({message: `No User Found with email: ${email}`});
         }
     
         const matched = await bcrypt.compare(password, user.password);
     
         if (!matched) {
-            return res.status(403).json('Invalid Email or Password!');
+            return res.status(403).json({message: 'Invalid Email or Password!'});
         }
     
         const token = jwt.sign({ _id: user._id }, process.env.JWT_KEY);
@@ -76,12 +80,12 @@ export const forgot = async (req, res) => {
 
         const user = await User.findOne({email: email});
         if(!user) {
-            return res.status(403).json(`No User Found with email: ${email}`);
+            return res.status(403).json({message: `No User Found with email: ${email}`});
         }
 
         const token = jwt.sign({_id: user._id}, process.env.RESET_PASSWORD_JWT_KEY, {expiresIn: '15m'});
         if(!token) {
-            return res.status(403).json("Token Error!");
+            return res.status(403).json({message: "Token Error!"});
         }
 
         let transporter = nodemailer.createTransport({
@@ -99,7 +103,7 @@ export const forgot = async (req, res) => {
         await transporter.sendMail({
             from: `${process.env.MAIL}`, // sender address
             to: `${email}`, // list of receivers
-            subject: "Reset Password || Athavani", // Subject line
+            subject: `Reset Password || Athavani || ${new Date().toLocaleDateString()}`, // Subject line
             html: `<div style="text-align: center; background-color: #ffa500; padding: 11px">
             <h1>You have requested to reset your Password</h1>
             <p style="padding: 15px 0;">
@@ -108,13 +112,14 @@ export const forgot = async (req, res) => {
             <a href="${process.env.CLIENT_URL}/resetPassword/${token}" target="_blank" style="text-decoration: none; background-color: tomato; color: white; padding: 1rem 1.5rem; border-radius: 25px; box-shadow: 0px 1px 3px black">
                   Reset Password
             </a>
-            <p style="padding: 15px 0;">If you did not make this request, you can simply ignore this email.</p>`, // html body
+            <p style="padding: 15px 0;">If you did not make this request, you can simply ignore this email.</p>
+            <p> Sent at ${new Date()}</p>`, // html body
             });
 
-        res.status(200).json("Email Sent");
+        return res.status(200).json({message: "Email Sent"});
 
     } catch (error) {
-        res.status(404).json({message: error.message});
+        return res.status(404).json({message: error.message});
     }
 }
 
@@ -123,27 +128,27 @@ export const resetPassword = async (req, res) => {
         const {token, newPassword} = req.body;
 
         if(!token) {
-            res.status(401).json("Token not found!");
+            return res.status(401).json({message: "Token not found!"});
         }
 
         const isVerified = await jwt.verify(token, process.env.RESET_PASSWORD_JWT_KEY);
 
         if(!isVerified) {
-            res.status(401).json("Invalid Token or it is expired!");
+            return res.status(401).json({message: "Invalid Token or it is expired!"});
         }
 
         const user = await User.findOne({resetPassLink: token});
 
         if(!user) {
-            res.status(404).json("User not Found!");
+            return res.status(404).json({message: "Token Expired or Invalid!"});
         }
 
         const hash = await bcrypt.hash(newPassword, 12);
-        await user.updateOne({password: hash});
+        await user.updateOne({password: hash, resetPassLink: ""});
 
-        res.status(200).json("Password Changed Successfully.");
+        return res.status(200).json({message: "Password Changed Successfully."});
     }
     catch (error) {
-        res.status(404).json({message: error.message});
+        return res.status(404).json({message: error.message});
     }
 }
